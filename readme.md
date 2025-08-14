@@ -7,6 +7,9 @@ This project runs a fully containerized hydroponic monitoring stack:
 - **Prometheus** for metrics
 - **Grafana** for visualization
 
+
+**note:** run everything in containers, since running things and connecting them locally were really time consuming and highly problematic since version conflicts and configuration issues and version compatibilty between two or other tools like kafka, spark is persistent when setting hybrid or fully local
+ 
 ## Prerequisites
 
 - Docker Engine
