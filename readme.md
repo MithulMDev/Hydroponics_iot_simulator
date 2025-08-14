@@ -1,4 +1,4 @@
-# Bulletproof Hydroponic Monitoring Project
+# Hydroponic Monitoring Project
 
 This project runs a fully containerized hydroponic monitoring stack:
 - **Kafka** for message transport
