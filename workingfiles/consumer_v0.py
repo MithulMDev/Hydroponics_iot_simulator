@@ -64,7 +64,7 @@ def test_influxdb_connection():
         return False
 
 def simple_batch_processor(batch_df, batch_id, measurement_name):
-    """Optimized batch processor for real-time data ingestion"""
+    """Simplified batch processor for raw sensor data"""
     try:
         row_count = batch_df.count()
         logger.info(f"=== PROCESSING BATCH {batch_id} for {measurement_name} ===")
@@ -85,7 +85,7 @@ def simple_batch_processor(batch_df, batch_id, measurement_name):
                 row_dict = row.asDict()
                 logger.debug(f"Processing row {i+1}: {list(row_dict.keys())}")
                 
-                # Create timestamp - prioritize current time for real-time ingestion
+                # Create timestamp
                 timestamp = None
                 if 'event_time' in row_dict and row_dict['event_time']:
                     timestamp = row_dict['event_time']
@@ -128,7 +128,7 @@ def simple_batch_processor(batch_df, batch_id, measurement_name):
                 logger.error(f"Error processing row {i+1}: {e}")
                 continue
         
-        # Write points to InfluxDB immediately
+        # Write points to InfluxDB
         if points:
             write_points_to_influxdb(points, measurement_name)
         else:
@@ -142,7 +142,7 @@ def simple_batch_processor(batch_df, batch_id, measurement_name):
         logger.error(traceback.format_exc())
 
 def aggregation_batch_processor(batch_df, batch_id, measurement_name):
-    """Optimized batch processor for aggregated data with minimal delay"""
+    """Batch processor for aggregated data"""
     try:
         row_count = batch_df.count()
         logger.info(f"=== PROCESSING AGGREGATION BATCH {batch_id} for {measurement_name} ===")
@@ -159,11 +159,10 @@ def aggregation_batch_processor(batch_df, batch_id, measurement_name):
             try:
                 row_dict = row.asDict()
                 
-                # Extract timestamp from window - use end time for more current data
+                # Extract timestamp from window
                 timestamp = None
                 if 'window' in row_dict and row_dict['window']:
-                    # Use window end time instead of start for more recent timestamps
-                    timestamp = row_dict['window']['end']
+                    timestamp = row_dict['window']['start']
                 else:
                     timestamp = datetime.utcnow()
                 
@@ -210,33 +209,22 @@ def aggregation_batch_processor(batch_df, batch_id, measurement_name):
         logger.error(f"Error in aggregation batch processor {batch_id}: {e}")
 
 def write_points_to_influxdb(points, measurement_name):
-    """Write points to InfluxDB with minimal latency"""
+    """Write points to InfluxDB with detailed logging"""
     logger.debug(f"Writing {len(points)} points to InfluxDB for {measurement_name}")
     
     try:
-        # Create InfluxDB client with optimized settings
+        # Create InfluxDB client
         client = InfluxDBClient(
             url=INFLUX_CONFIG['url'], 
             token=INFLUX_CONFIG['token'], 
             org=INFLUX_CONFIG['org']
         )
         
-        # Create write API with faster settings
-        write_options = WriteOptions(
-            batch_size=1000,
-            flush_interval=1000,  # 1 second flush interval for faster writes
-            jitter_interval=0,
-            retry_interval=1000,
-            max_retries=3
-        )
-        write_api = client.write_api(write_options=write_options)
+        # Create write API
+        write_api = client.write_api(write_options=SYNCHRONOUS)
         
-        # Write points immediately
+        # Write points
         write_api.write(bucket=INFLUX_CONFIG['bucket'], record=points)
-        
-        # Force flush for immediate writing
-        write_api.flush()
-        
         logger.info(f"✅ Successfully wrote {len(points)} points to {measurement_name}")
         
         # Close client
@@ -266,7 +254,7 @@ class HydroponicAnalyticsConsumer:
             'light_intensity_ppfd': (0.0, 1200.0)
         }
         
-        # Initialize Spark Session with optimized settings
+        # Initialize Spark Session
         self.spark = None
         self._init_spark()
         
@@ -274,7 +262,7 @@ class HydroponicAnalyticsConsumer:
         self.active_queries = []
         
     def _init_spark(self):
-        """Initialize Spark session with optimized settings for real-time processing"""
+        """Initialize Spark session"""
         try:
             self.spark = SparkSession.builder \
                 .appName("HydroponicRealTimeAnalytics") \
@@ -283,13 +271,10 @@ class HydroponicAnalyticsConsumer:
                 .config("spark.sql.adaptive.enabled", "false") \
                 .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") \
                 .config("spark.driver.memory", "2g") \
-                .config("spark.sql.streaming.minBatchesToRetain", "1") \
-                .config("spark.sql.streaming.fileSource.cleaner.numThreads", "1") \
-                .config("spark.sql.streaming.schemaInference", "true") \
                 .getOrCreate()
 
             self.spark.sparkContext.setLogLevel("WARN")
-            logger.info("Spark session initialized with optimized settings")
+            logger.info("Spark session initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Spark: {e}")
             raise
@@ -316,7 +301,7 @@ class HydroponicAnalyticsConsumer:
         ])
     
     def read_kafka_stream(self):
-        """Read streaming data from Kafka with optimized settings"""
+        """Read streaming data from Kafka"""
         logger.info("Setting up Kafka stream reader...")
         
         return self.spark \
@@ -326,8 +311,6 @@ class HydroponicAnalyticsConsumer:
             .option("subscribe", "hydrop-sensors") \
             .option("startingOffsets", "latest") \
             .option("failOnDataLoss", "false") \
-            .option("maxOffsetsPerTrigger", "1000") \
-            .option("kafka.max.poll.records", "1000") \
             .load()
     
     def parse_json_data(self, df):
@@ -355,7 +338,7 @@ class HydroponicAnalyticsConsumer:
         return parsed_df
     
     def calculate_basic_aggregations(self, df, window_duration):
-        """Calculate basic aggregations with minimal watermark delay"""
+        """Calculate basic aggregations for time windows"""
         sensor_cols = [
             'water_temperature', 'water_ph', 'ec_tds', 'water_level_percent',
             'air_temperature', 'humidity', 'light_intensity_ppfd', 'plant_activity'
@@ -372,7 +355,7 @@ class HydroponicAnalyticsConsumer:
             ])
         
         return df \
-            .withWatermark("event_time", "30 seconds") \
+            .withWatermark("event_time", "2 minutes") \
             .groupBy(
                 window(col("event_time"), window_duration, window_duration)
             ) \
@@ -381,7 +364,7 @@ class HydroponicAnalyticsConsumer:
             .withColumn("analysis_type", lit("basic_aggregation"))
     
     def detect_anomalies(self, df, window_duration):
-        """Detect anomalies with minimal delay"""
+        """Detect anomalies using time-based windows"""
         anomaly_df = df
         
         for sensor, (min_val, max_val) in self.optimal_ranges.items():
@@ -396,13 +379,13 @@ class HydroponicAnalyticsConsumer:
         agg_exprs.append(count("*").alias("total_readings"))
         
         return anomaly_df \
-            .withWatermark("event_time", "30 seconds") \
+            .withWatermark("event_time", "2 minutes") \
             .groupBy(window(col("event_time"), window_duration)) \
             .agg(*agg_exprs) \
             .withColumn("analysis_type", lit("anomaly_detection"))
     
     def calculate_system_health(self, df, window_duration):
-        """Calculate system health with minimal delay"""
+        """Calculate overall system health metrics"""
         health_df = df
         
         for sensor, (min_val, max_val) in self.optimal_ranges.items():
@@ -431,7 +414,7 @@ class HydroponicAnalyticsConsumer:
         ])
         
         return health_df \
-            .withWatermark("event_time", "30 seconds") \
+            .withWatermark("event_time", "2 minutes") \
             .groupBy(
                 window(col("event_time"), window_duration, window_duration)
             ) \
@@ -440,7 +423,7 @@ class HydroponicAnalyticsConsumer:
             .withColumn("analysis_type", lit("system_health"))
     
     def start_streaming(self):
-        """Start the streaming analytics pipeline with priority on real-time data"""
+        """Start the streaming analytics pipeline"""
         logger.info("🚀 Starting Hydroponic Real-time Analytics Consumer...")
         logger.info("Starting Prometheus metrics server on port 8001...")
         
@@ -458,10 +441,9 @@ class HydroponicAnalyticsConsumer:
             return
         
         logger.info("=" * 60)
-        logger.info("OPTIMIZED REAL-TIME PROCESSING MODE")
-        logger.info("Priority: Raw Data (5s) > Quick Aggregations (15s)")
-        logger.info("Reduced Watermarks: 30s (was 2min)")
-        logger.info("Optimized Windows: 5min only for minimal delay")
+        logger.info("COMPLETE PROCESSING MODE")
+        logger.info("Processing: Raw Data + Aggregations + Anomalies + Health")
+        logger.info("Time Windows: 5min, 15min, 1hour")
         logger.info("=" * 60)
         
         try:
@@ -469,58 +451,75 @@ class HydroponicAnalyticsConsumer:
             raw_stream = self.read_kafka_stream()
             parsed_stream = self.parse_json_data(raw_stream)
             
-            # 1. PRIORITY: Raw data stream with fastest possible processing
+            # 1. Raw data stream (keep the working one)
             raw_query = parsed_stream.writeStream \
                 .foreachBatch(lambda df, batch_id: simple_batch_processor(df, batch_id, "raw_sensor_data")) \
                 .outputMode("append") \
-                .option("checkpointLocation", "/tmp/checkpoints/raw_realtime") \
-                .trigger(processingTime='5 seconds') \
+                .option("checkpointLocation", "/tmp/checkpoints/raw_simplified") \
+                .trigger(processingTime='10 seconds') \
                 .start()
             
             self.active_queries.append(raw_query)
-            logger.info("✅ Started HIGH PRIORITY raw data stream (5s trigger)")
+            logger.info("✅ Started raw data stream")
             
-            # 2. Only create essential aggregations with minimal delay
-            # Focus on 5-minute window only to reduce processing overhead
-            window = "5 minutes"
+            # 2. Create all time-based analytics streams
+            windows = ["5 minutes", "15 minutes", "1 hour"]
             
-            try:
-                # Basic Aggregations - reduced trigger time
-                agg_stream = self.calculate_basic_aggregations(parsed_stream, window)
-                agg_query = agg_stream.writeStream \
-                    .foreachBatch(lambda df, batch_id: 
-                                aggregation_batch_processor(df, batch_id, "aggregations_5min")) \
-                    .outputMode("append") \
-                    .option("checkpointLocation", "/tmp/checkpoints/agg_5min_fast") \
-                    .trigger(processingTime='15 seconds') \
-                    .start()
-                self.active_queries.append(agg_query)
-                logger.info("✅ Started fast 5-min aggregation stream (15s trigger)")
-            except Exception as e:
-                logger.error(f"Failed to start aggregation stream: {e}")
-            
-            try:
-                # Anomaly Detection - essential for monitoring
-                anomaly_stream = self.detect_anomalies(parsed_stream, window)
-                anomaly_query = anomaly_stream.writeStream \
-                    .foreachBatch(lambda df, batch_id: 
-                                aggregation_batch_processor(df, batch_id, "anomalies_5min")) \
-                    .outputMode("append") \
-                    .option("checkpointLocation", "/tmp/checkpoints/anomaly_5min_fast") \
-                    .trigger(processingTime='15 seconds') \
-                    .start()
-                self.active_queries.append(anomaly_query)
-                logger.info("✅ Started fast anomaly detection stream (15s trigger)")
-            except Exception as e:
-                logger.error(f"Failed to start anomaly stream: {e}")
+            for window in windows:
+                window_safe = window.replace(" ", "_")
+                
+                # Basic Aggregations
+                try:
+                    agg_stream = self.calculate_basic_aggregations(parsed_stream, window)
+                    agg_query = agg_stream.writeStream \
+                        .foreachBatch(lambda df, batch_id, measurement=f"aggregations_{window_safe}": 
+                                    aggregation_batch_processor(df, batch_id, measurement)) \
+                        .outputMode("append") \
+                        .option("checkpointLocation", f"/tmp/checkpoints/agg_{window_safe}") \
+                        .trigger(processingTime='30 seconds') \
+                        .start()
+                    self.active_queries.append(agg_query)
+                    logger.info(f"✅ Started aggregation stream for {window}")
+                except Exception as e:
+                    logger.error(f"Failed to start aggregation stream for {window}: {e}")
+                
+                # Anomaly Detection
+                try:
+                    anomaly_stream = self.detect_anomalies(parsed_stream, window)
+                    anomaly_query = anomaly_stream.writeStream \
+                        .foreachBatch(lambda df, batch_id, measurement=f"anomalies_{window_safe}": 
+                                    aggregation_batch_processor(df, batch_id, measurement)) \
+                        .outputMode("append") \
+                        .option("checkpointLocation", f"/tmp/checkpoints/anomaly_{window_safe}") \
+                        .trigger(processingTime='30 seconds') \
+                        .start()
+                    self.active_queries.append(anomaly_query)
+                    logger.info(f"✅ Started anomaly detection stream for {window}")
+                except Exception as e:
+                    logger.error(f"Failed to start anomaly stream for {window}: {e}")
+                
+                # System Health
+                try:
+                    health_stream = self.calculate_system_health(parsed_stream, window)
+                    health_query = health_stream.writeStream \
+                        .foreachBatch(lambda df, batch_id, measurement=f"health_{window_safe}": 
+                                    aggregation_batch_processor(df, batch_id, measurement)) \
+                        .outputMode("append") \
+                        .option("checkpointLocation", f"/tmp/checkpoints/health_{window_safe}") \
+                        .trigger(processingTime='30 seconds') \
+                        .start()
+                    self.active_queries.append(health_query)
+                    logger.info(f"✅ Started health monitoring stream for {window}")
+                except Exception as e:
+                    logger.error(f"Failed to start health stream for {window}: {e}")
             
             self.active_streams.set(len(self.active_queries))
-            logger.info(f"🎉 Started {len(self.active_queries)} optimized streaming queries")
-            logger.info("📊 Real-time measurements:")
-            logger.info("   - raw_sensor_data (every 5s) - PRIORITY")
-            logger.info("   - aggregations_5min (every 15s)")
-            logger.info("   - anomalies_5min (every 15s)")
-            logger.info("⚡ Watermark reduced to 30s for minimal delay")
+            logger.info(f"🎉 Started {len(self.active_queries)} total streaming queries")
+            logger.info("📊 All measurements will now be generated:")
+            logger.info("   - raw_sensor_data (every 10s)")
+            logger.info("   - aggregations_5_minutes, aggregations_15_minutes, aggregations_1_hour")
+            logger.info("   - anomalies_5_minutes, anomalies_15_minutes, anomalies_1_hour")
+            logger.info("   - health_5_minutes, health_15_minutes, health_1_hour")
             
             # Wait for all queries
             for query in self.active_queries:
