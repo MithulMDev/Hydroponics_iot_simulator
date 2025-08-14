@@ -1,6 +1,6 @@
-# Complete Problem-to-Solution Journey: Simple Explanation
+# Problem-to-Solution Journey
 
-Let me walk you through **every single problem** we encountered and **exactly how we fixed each one**, in simple terms.
+Walk through of **every single problem** we encountered and **exactly how we fixed each one**, in simple terms.
 
 ## 🚨 **Problem #1: Prometheus Can't Find Metrics** 
 **When it started:** Right from the beginning
