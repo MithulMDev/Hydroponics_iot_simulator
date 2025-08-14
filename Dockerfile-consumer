@@ -1,0 +1,27 @@
+FROM bitnami/spark:3.3.4
+
+ENV HOME=/tmp
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+USER root
+RUN useradd -m -u 1001 sparkuser && chown -R sparkuser:sparkuser /app
+RUN mkdir -p /tmp/checkpoints && chown -R sparkuser:sparkuser /tmp/checkpoints
+
+COPY requirements-consumer.txt .
+RUN pip install --no-cache-dir -r requirements-consumer.txt
+
+COPY consumer.py .
+
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+USER sparkuser
+
+ENTRYPOINT ["spark-submit", \
+    "--master", "local[*]", \
+    "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.4", \
+    "--conf", "spark.driver.memory=2g", \
+    "--conf", "spark.driver.maxResultSize=1g", \
+    "--conf", "spark.sql.streaming.forceDeleteTempCheckpointLocation=true", \
+    "consumer.py"]

@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'spark-producer'
+    static_configs:
+      - targets: ['spark-producer:8000']
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  - job_name: 'spark-consumer'
+    static_configs:
+      - targets: ['spark-consumer:8001'] 
+    scrape_interval: 10s
+    metrics_path: /metrics

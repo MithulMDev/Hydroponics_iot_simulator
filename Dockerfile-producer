@@ -1,0 +1,17 @@
+FROM python:3.10-slim
+
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
+
+COPY requirements-producer.txt .
+RUN pip install --no-cache-dir -r requirements-producer.txt
+
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+COPY producer.py .
+
+USER appuser
+
+CMD ["python", "producer.py"]
