@@ -48,15 +48,6 @@ This project runs a fully containerized hydroponic monitoring stack:
    docker-compose ps
    ```
 
-## Access UIs
-
-- **Grafana**: http://localhost:3000 (admin/admin)  
-- **Prometheus**: http://localhost:9090  
-- **InfluxDB**: http://localhost:8086 (admin/password123)  
-- **Spark Producer Metrics**: http://localhost:8000/metrics  
-- **Spark Consumer Metrics**: http://localhost:8001/metrics  
-- **Kafka Broker**: PLAINTEXT://localhost:9092  
-
 ## Viewing Logs
 
 - **Producer logs**:
